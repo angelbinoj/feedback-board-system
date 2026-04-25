@@ -37,75 +37,29 @@ import { EllipsisVertical, MessageCircle, ThumbsUp } from "lucide-react";
 import UpdatePost from "./UpdatePost";
 
 
-export default function UserPost() {
+type Props = {
+  user:User | undefined;
+  posts: any[];
+  likedPosts: any[];
+  setLikedPosts :React.Dispatch<React.SetStateAction<any[]>>;
+  setPosts: React.Dispatch<React.SetStateAction<any[]>>;
+  fetchPosts:() => Promise<void>;
+};
+
+export default function UserPost(
+    {
+  posts,
+  setPosts,
+  likedPosts,
+  setLikedPosts,
+  fetchPosts,
+  user,
+}: Props
+) {
 
     const [title, setTitle] = useState("");
     const [description, setDescription] = useState("");
-    const [user, setUser] = useState<User>();
-    const [posts, setPosts] = useState<any[]>([]);
-    const [likedPosts, setLikedPosts] = useState<any[]>([]);
     const [comment, setComment] = useState("");
-
-
-    useEffect(() => {
-        const fetchUser = async () => {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (!user) return;
-            setUser(user)
-        };
-
-        fetchUser();
-    }, []);
-
-    useEffect(() => {
-        const fetchPosts = async () => {
-            try {
-                const { data, error } = await supabase
-                    .from("posts")
-                    .select(`*,
-                        votes(*),
-                        comments(*)
-                        `)
-                    .eq("user_id", user?.id)
-                    .order("created_at", { ascending: false });
-
-                if (error) {
-                    console.log(error);
-                    return;
-                }
-
-                setPosts(data);
-                console.log(data);
-
-
-            } catch (error) {
-                console.log(error);
-            }
-        };
-
-        const fetchVotes = async () => {
-            try {
-                const { data: userVotes } = await supabase
-                    .from('votes')
-                    .select("post_id")
-                    .eq("user_id", user?.id);
-
-                const LikedPosts = userVotes?.map(v => v.post_id) || [];
-                setLikedPosts(LikedPosts)
-
-            } catch (error) {
-                console.log(error);
-
-            }
-        }
-
-
-        fetchPosts();
-        fetchVotes();
-        console.log(likedPosts);
-
-
-    }, [user?.id]);
 
     const handleAddPost = async () => {
         try {
@@ -120,7 +74,10 @@ export default function UserPost() {
                 toast.error(error.message);
                 return;
             }
+            setTitle("");
+            setDescription("")
             toast.success("Post added successfully")
+            fetchPosts();
 
         } catch (error) {
             console.log(error);
@@ -145,10 +102,14 @@ export default function UserPost() {
                     .delete()
                     .eq("id", existingVote.id);
 
+                    setLikedPosts(prev => prev.filter(id => id !== postId));
+
             } else {
                 const { data, error } = await supabase
                     .from("votes")
                     .insert({ post_id: postId, user_id: user?.id });
+
+                    setLikedPosts(prev => [...prev, postId]);
 
                 console.log(error);
 
@@ -158,24 +119,6 @@ export default function UserPost() {
 
         }
     };
-
-    //       const handleUpdatePost = async (postId) => {
-    //     try {
-    //       const { error } = await supabase
-    //       .from("posts")
-    //       .update({ title, description })
-    //       .eq("id", postId);
-
-    //     if (error) {
-    //       console.log(error);
-    //       return;
-    //     }
-
-    //     } catch (error) {
-    //       console.log(error);    
-    //     }
-
-    //   };
 
 
     const handleDeletePost = async (postId: string) => {
@@ -195,6 +138,7 @@ export default function UserPost() {
             console.log(error);
             return;
         }
+        fetchPosts();
     }
 
     const handleAddComment = async (postId: any) => {
@@ -226,68 +170,6 @@ export default function UserPost() {
         }
     }
 
-
-    useEffect(() => {
-        if (!user || !posts) return;
-
-        const channel = supabase
-            .channel("votes")
-            .on(
-                "postgres_changes",
-                {
-                    event: "*",
-                    schema: "public",
-                    table: "votes",
-                },
-                (payload) => {
-                    console.log(payload)
-
-                    if (payload.eventType == "INSERT") {
-
-                        if (payload.new.user_id == user.id) {
-                            setLikedPosts((prev) => [...prev, payload.new.post_id]);
-                        }
-
-                        setPosts((prev) =>
-                            prev.map((post) => {
-                                if (post.id == payload.new.post_id) {
-                                    return {
-                                        ...post, votes: [...post.votes, payload.new]
-                                    }
-                                }
-                                return post;
-                            }))
-                    }
-
-                    if (payload.eventType == "DELETE") {
-
-                        setPosts((prev) =>
-                            prev.map((post) => ({
-                                ...post,
-                                votes: post?.votes.filter(
-                                    (v: any) => v.id !== payload.old.id
-                                ),
-                            }))
-                        );
-
-                        setLikedPosts((prev) =>
-                            prev.map((post) => ({
-                                ...post.post?.votes.filter(
-                                    (v: any) => v.id !== payload.old.id
-                                ),
-                            }))
-                        );
-                    }
-                }
-            )
-            .subscribe();
-
-        return () => {
-            supabase.removeChannel(channel);
-        };
-    }, [user]);
-
-    
 
 
     return (
@@ -326,13 +208,17 @@ export default function UserPost() {
                 </CardContent>
             </Card>
 
-            {posts.length === 0 ? (
+             {posts
+  .filter((post) => post.user_id === user?.id)
+            .length === 0 ? (
                 <div className="text-center py-10 bg-[#EEF3F3] border rounded-lg">
                     No Posts made yet!!
                 </div>
             ) : (
                 <div className=" flex flex-col gap-4">
-                    {posts.map((post) => (
+                    {posts
+  .filter((post) => post.user_id === user?.id)
+  .map((post) => (
                         <Card key={post?.id} size="sm" className="mx-auto w-full max-w-sm">
                             <div className="pr-2 pb-3 h-9  border-b flex items-center justify-between">
                                 <div className="flex items-center gap-2 py-1">

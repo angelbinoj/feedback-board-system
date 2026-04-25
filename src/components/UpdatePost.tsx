@@ -45,8 +45,8 @@ export default function UpdatePost({ post }: Props) {
       }
 
 
+      toast.success("Post updated");
      window.location.reload();
-    toast.success("Post updated");
     } catch (error) {
       console.log("error updating task", error);
     }
@@ -92,7 +92,7 @@ export default function UpdatePost({ post }: Props) {
           <Field orientation="horizontal" className="flex gap-2">
 
             <DialogClose asChild>
-              <Button variant="outline" className="flex-1 hover:border-slate-700">
+              <Button variant="outline" className="flex-1 hover:border-slate-200">
                 Cancel
               </Button>
             </DialogClose>
